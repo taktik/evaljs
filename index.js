@@ -258,31 +258,38 @@ Environment.prototype._genUnaryExpr = function (node) {
   if (node.operator === 'delete') {
     return this._genDelete(node);
   }
+
+  function* callExpr(expr) {
+      var result;
+      if (expr.constructor.name == 'GeneratorFunction') {
+          result = yield* expr();
+      } else {
+          result = expr();
+      }
+      return result;
+  }
+
   var a = this._gen(node.argument);
-  var op = {
-    '-': function () {
-      return -a();
+  return {
+    '-': function* () {
+      return -(yield* callExpr(a));
     },
-    '+': function () {
-      return +a();
+    '+': function* () {
+        return +(yield* callExpr(a));
     },
-    '!': function () {
-      return !a();
+    '!': function* () {
+      return !(yield* callExpr(a));
     },
-    '~': function () {
-      return ~a();
+    '~': function* () {
+      return ~(yield* callExpr(a));
     },
-    'typeof': function () {
-      return typeof a();
+    'typeof': function* () {
+      return typeof (yield* callExpr(a));
     },
-    'void': function () {
-      return void a();
+    'void': function* () {
+      return void (yield* callExpr(a));
     }
   }[node.operator];
-
-  return function () {
-    return op();
-  };
 };
 
 Environment.prototype._genDelete = function (node) {
@@ -382,18 +389,16 @@ Environment.prototype._genCallExpr = function (node) {
 };
 
 Environment.prototype._genNewExpr = function (node) {
+  //if (node.callee.type === 'Identifier')
   var callee = this._gen(node.callee);
   var args = node.arguments.map(this._boundGen);
   var self = this;
 
-  return function* () {
+  return function () {
     self.emit('line', node.loc.start.line);
     var cl = callee();
     var ar = args.map(execute);
-    var newObject = Object.create(cl.prototype);
-    var constructor = cl.apply(newObject, ar);
-    yield* constructor;
-    return newObject;
+    return new cl(...ar);
   };
 };
 
@@ -487,7 +492,7 @@ Environment.prototype._genLit = function (node) {
 Environment.prototype._genIdent = function (node) {
   var self = this;
   return function () {
-    return self._getVarStore(node.name)[node.name];
+    return self._getVarStore(node.name)[node.name] || {Date,Object,Array,RegExp,String,Number}[node.name];
   };
 };
 

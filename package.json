@@ -5,18 +5,18 @@
   "main": "index.js",
   "bin": "./bin/evaljs",
   "dependencies": {
-    "acorn": "^4.0.4",
-    "require-from-string": "^1.2.1"
+    "acorn": "^6.1.1",
+    "require-from-string": "^2.0.2"
   },
   "devDependencies": {
-    "browserify": "^13.1.1",
-    "esprima": "^3.1.2",
-    "jshint": "^2.9.4",
-    "regenerator": "^0.9.5",
-    "uglify-js": "^2.7.5"
+    "browserify": "^16.2.3",
+    "esprima": "^4.0.1",
+    "jshint": "^2.10.2",
+    "regenerator": "^0.13.3",
+    "uglify-js-es6": "^2.8.9"
   },
   "scripts": {
-    "test": "npm run compile && npm run jshint && node test.js",
+    "test": "npm run compile && node $NODE_DEBUG_OPTION test.js",
     "compile": "./node_modules/regenerator/bin/regenerator --include-runtime ./index.js > ./index-compiled.js",
     "jshint": "./node_modules/.bin/jshint index.js test.js theTest.js",
     "build": "mkdir -p dist && npm run build-js && npm run minify",

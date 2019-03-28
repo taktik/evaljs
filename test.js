@@ -1,9 +1,9 @@
 "use strict";
 
-var fs = require('fs');
+//var fs = require('fs');
 var evaljs = require('./index');
-var parse = require('acorn').parse;
-var requireFromString = require('require-from-string');
+//var parse = require('acorn').parse;
+//var requireFromString = require('require-from-string');
 
 function run(iter){
   var result = iter.next();
@@ -14,13 +14,29 @@ function run(iter){
 }
 
 // basic
-console.log(evaljs.evaluate('1 + 1'));
+console.log('2 = ',evaljs.evaluate('1 + 1'));
+
 
 // theTest.js
-var code = fs.readFileSync('theTest.js', {encoding: 'UTF-8'});
-var parsedCode = parse(code, {'locations': true});
+//var code = fs.readFileSync('theTest.js', {encoding: 'UTF-8'});
+//var parsedCode = parse(code, {'locations': true});
 var env = new evaljs.Environment([{console: console}]);
-var iter1 = env.gen(parsedCode)();
+
+//console.log('new Date() = ',run(env.gen("new Date()")()));
+
+var aaa = env.gen("+(new Date())");
+var bbb = aaa();
+bbb.next();
+
+console.log('+(new Date()) = ',run(env.gen("+(new Date())")()));
+console.log('(new Date()).toString() = ',run(env.gen("(new Date()).toString()")()));
+console.log('Date.now() = ',run(env.gen("Date.now()")()));
+//console.log('[1,2].map(x=>2*x)',run(env.gen("[1,2].map(x=>2*x)")()));
+
+return;
+
+
+/*var iter1 = env.gen(parsedCode)();
 run(iter1);
 
 // index.js
@@ -60,3 +76,4 @@ console.log(run(iter5));
 // using esprima
 var esprima = require('esprima');
 console.log(evaljs.evaluate(esprima.parse('1 + 1')));
+*/
