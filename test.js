@@ -31,6 +31,7 @@ bbb.next();
 console.log('+(new Date()) = ',run(env.gen("+(new Date())")()));
 console.log('(new Date()).toString() = ',run(env.gen("(new Date()).toString()")()));
 console.log('Date.now() = ',run(env.gen("Date.now()")()));
+console.log('(function() { return Date.now(); })()',run(env.gen("(function() { return Date.now(); })()")()));
 //console.log('[1,2].map(x=>2*x)',run(env.gen("[1,2].map(x=>2*x)")()));
 
 return;

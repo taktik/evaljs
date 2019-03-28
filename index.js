@@ -86,6 +86,17 @@ function createVarStore(parent, vars) {
   };
 }
 
+Environment.prototype.callExpr = function* callExpr(expr) {
+    var result;
+    if (expr.constructor.name == 'GeneratorFunction') {
+        result = yield* expr();
+    } else {
+        result = expr();
+    }
+    return result;
+};
+
+
 Environment.prototype.gen = function (node) {
   var opts = {
     'locations': true
@@ -157,89 +168,81 @@ Environment.prototype._gen = function (node) {
 };
 
 Environment.prototype._genBinExpr = function (node) {
+  var self = this;
+
   var a = this._gen(node.left);
   var b = this._gen(node.right);
 
-  function* callExpr(expr) {
-    var result;
-    if (expr.constructor.name == 'GeneratorFunction') {
-      result = yield* expr();
-    } else {
-      result = expr();
-    }
-    return result;
-  }
-
   var cmp = {
     '==': function* () {
-      return (yield* callExpr(a)) == (yield* callExpr(b));
+      return (yield* self.callExpr(a)) == (yield* self.callExpr(b));
     },
     '!=': function* () {
-      return (yield* callExpr(a)) != (yield* callExpr(b));
+      return (yield* self.callExpr(a)) != (yield* self.callExpr(b));
     },
     '===': function* () {
-      return (yield* callExpr(a)) === (yield* callExpr(b));
+      return (yield* self.callExpr(a)) === (yield* self.callExpr(b));
     },
     '!==': function* () {
-      return (yield* callExpr(a)) !== (yield* callExpr(b));
+      return (yield* self.callExpr(a)) !== (yield* self.callExpr(b));
     },
     '<': function* () {
-      return (yield* callExpr(a)) < (yield* callExpr(b));
+      return (yield* self.callExpr(a)) < (yield* self.callExpr(b));
     },
     '<=': function* () {
-      return (yield* callExpr(a)) <= (yield* callExpr(b));
+      return (yield* self.callExpr(a)) <= (yield* self.callExpr(b));
     },
     '>': function* () {
-      return (yield* callExpr(a)) > (yield* callExpr(b));
+      return (yield* self.callExpr(a)) > (yield* self.callExpr(b));
     },
     '>=': function* () {
-      return (yield* callExpr(a)) >= (yield* callExpr(b));
+      return (yield* self.callExpr(a)) >= (yield* self.callExpr(b));
     },
     '<<': function* () {
-      return (yield* callExpr(a)) << (yield* callExpr(b));
+      return (yield* self.callExpr(a)) << (yield* self.callExpr(b));
     },
     '>>': function* () {
-      return (yield* callExpr(a)) >> (yield* callExpr(b));
+      return (yield* self.callExpr(a)) >> (yield* self.callExpr(b));
     },
     '>>>': function* () {
-      return (yield* callExpr(a)) >>> (yield* callExpr(b));
+      return (yield* self.callExpr(a)) >>> (yield* self.callExpr(b));
     },
     '+': function* () {
-      return (yield* callExpr(a)) + (yield* callExpr(b));
+      return (yield* self.callExpr(a)) + (yield* self.callExpr(b));
     },
     '-': function* () {
-      return (yield* callExpr(a)) - (yield* callExpr(b));
+      return (yield* self.callExpr(a)) - (yield* self.callExpr(b));
     },
     '*': function* () {
-      return (yield* callExpr(a)) * (yield* callExpr(b));
+      return (yield* self.callExpr(a)) * (yield* self.callExpr(b));
     },
     '/': function* () {
-      return (yield* callExpr(a)) / (yield* callExpr(b));
+      return (yield* self.callExpr(a)) / (yield* self.callExpr(b));
     },
     '%': function* () {
-      return (yield* callExpr(a)) % (yield* callExpr(b));
+      return (yield* self.callExpr(a)) % (yield* self.callExpr(b));
     },
     '|': function* () {
-      return (yield* callExpr(a)) | (yield* callExpr(b));
+      return (yield* self.callExpr(a)) | (yield* self.callExpr(b));
     },
     '^': function* () {
-      return (yield* callExpr(a)) ^ (yield* callExpr(b));
+      return (yield* self.callExpr(a)) ^ (yield* self.callExpr(b));
     },
     '&': function* () {
-      return (yield* callExpr(a)) & (yield* callExpr(b));
+      return (yield* self.callExpr(a)) & (yield* self.callExpr(b));
     },
     'in': function* () {
-      return (yield* callExpr(a)) in (yield* callExpr(b));
+      return (yield* self.callExpr(a)) in (yield* self.callExpr(b));
     },
     'instanceof': function* () {
-      return (yield* callExpr(a)) instanceof (yield* callExpr(b));
+      return (yield* self.callExpr(a)) instanceof (yield* self.callExpr(b));
     },
     // logic expressions
     '||': function* () {
-      return (yield* callExpr(a)) || (yield* callExpr(b));
+      return (yield* self.callExpr(a)) || (yield* self.callExpr(b));
     },
     '&&': function* () {
-      return (yield* callExpr(a)) && (yield* callExpr(b));
+      return (yield* self.callExpr(a)) && (yield* self.callExpr(b));
     }
   }[node.operator];
 
@@ -255,39 +258,31 @@ Environment.prototype._genBinExpr = function (node) {
 };
 
 Environment.prototype._genUnaryExpr = function (node) {
+  var self = this;
+
   if (node.operator === 'delete') {
     return this._genDelete(node);
-  }
-
-  function* callExpr(expr) {
-      var result;
-      if (expr.constructor.name == 'GeneratorFunction') {
-          result = yield* expr();
-      } else {
-          result = expr();
-      }
-      return result;
   }
 
   var a = this._gen(node.argument);
   return {
     '-': function* () {
-      return -(yield* callExpr(a));
+      return -(yield* self.callExpr(a));
     },
     '+': function* () {
-        return +(yield* callExpr(a));
+        return +(yield* self.callExpr(a));
     },
     '!': function* () {
-      return !(yield* callExpr(a));
+      return !(yield* self.callExpr(a));
     },
     '~': function* () {
-      return ~(yield* callExpr(a));
+      return ~(yield* self.callExpr(a));
     },
     'typeof': function* () {
-      return typeof (yield* callExpr(a));
+      return typeof (yield* self.callExpr(a));
     },
     'void': function* () {
-      return void (yield* callExpr(a));
+      return void (yield* self.callExpr(a));
     }
   }[node.operator];
 };
@@ -492,7 +487,8 @@ Environment.prototype._genLit = function (node) {
 Environment.prototype._genIdent = function (node) {
   var self = this;
   return function () {
-    return self._getVarStore(node.name)[node.name] || {Date,Object,Array,RegExp,String,Number}[node.name];
+    return self._getVarStore(node.name)[node.name] ||
+        {Date,Object,Array,RegExp,String,Number}[node.name];
   };
 };
 
@@ -690,9 +686,9 @@ Environment.prototype._genEmptyStmt = function () {
 Environment.prototype._genRetStmt = function (node) {
   var self = this;
   var arg = node.argument ? this._gen(node.argument) : noop;
-  return function () {
+  return function* () {
     self.emit('line', node.loc.start.line);
-    return new Return(arg());
+    return new Return(yield* self.callExpr(arg));
   };
 };
 
