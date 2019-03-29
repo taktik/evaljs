@@ -726,17 +726,14 @@ Environment.prototype._genRetStmt = function (node) {
 
 Environment.prototype._genIfStmt = function (node) {
   var self = this;
-  var test = function () {
-    self.emit('line', node.loc.start.line);
-    return self._gen(node.test)();
-  };
+  var test = self._gen(node.test);
   var consequent = this._gen(node.consequent);
   var alternate = node.alternate ? this._gen(node.alternate) : function* () {
     return noop;
   };
 
   return function* () {
-    var result = test() ? yield* consequent() : yield* alternate();
+    var result = (yield* self.callExpr(test)) ? (yield* self.callExpr(consequent)) : (yield* self.callExpr(alternate));
     return result;
   };
 };
@@ -805,7 +802,7 @@ Environment.prototype._genForInStmt = function (node) {
   return function* () {
     self.emit('line', node.loc.start.line);
     var resp;
-    for (var x in right()) {
+    for (var x in (yield* self.callExpr(right))) {
       self.emit('line', node.loc.start.line);
       yield* self.callExpr(self._genAssignExpr({
         operator: '=',
@@ -851,9 +848,11 @@ Environment.prototype._genTryStmt = function (node) {
 
   return function* () {
     try {
-      return yield* self.callExpr(finalizer, yield* self.callExpr(block));
+      return yield* self.callExpr(block);
     } catch (err) {
       return yield* self.callExpr(handler, err);
+    } finally {
+        yield* self.callExpr(finalizer);
     }
   };
 };
