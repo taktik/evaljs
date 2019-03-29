@@ -8398,7 +8398,8 @@ Environment.prototype._genFuncExpr = function (node) {
               self._curThis = this;
 
               addDeclarationsToStore(declarations, self._curVarStore);
-              self._curVarStore.vars.arguments = args;
+                // noinspection JSAnnotator
+                self._curVarStore.vars.arguments = args;
 
               // add function args to var store
               node.params.forEach(function (param, i) {

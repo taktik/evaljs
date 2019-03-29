@@ -15,31 +15,6 @@ var EventEmitter = require("events").EventEmitter;
 
 function noop() {}
 
-function execute(func) {
-  var result = func();
-  if ('' + result === 'null') {
-    return result;
-  }
-  // FIXME: Convert to yield*
-  if (result !== undefined) {
-    if (result.next) {
-      var iter = result;
-      var res = iter.next();
-      while (!res.done) {
-        res = iter.next();
-      }
-      if ('' + res.value === 'null') {
-        return res.value;
-      }
-      if ('' + res.value === 'undefined') {
-        return res.value;
-      }
-      return res.value;
-    }
-  }
-  return result;
-}
-
 function Arguments() {
   //TODO: add es3 'arguments.callee'?
 }
@@ -86,12 +61,20 @@ function createVarStore(parent, vars) {
   };
 }
 
-Environment.prototype.callExpr = function* callExpr(expr) {
+Environment.prototype.callExpr = function* (expr, arg) {
     var result;
-    if (expr.constructor.name == 'GeneratorFunction') {
-        result = yield* expr();
+    if (expr.constructor.name === 'GeneratorFunction') {
+        result = yield* expr(arg);
     } else {
-        result = expr();
+        result = expr(arg);
+    }
+    return result;
+};
+
+Environment.prototype.mapExpr = function* (items, generatorFunction) {
+    var result = [];
+    for(let i=0;i<items.length;i++) {
+        result.push(yield* generatorFunction(items[i]));
     }
     return result;
 };
@@ -145,7 +128,8 @@ Environment.prototype._gen = function (node) {
     TryStatement: this._genTryStmt,
     ContinueStatement: this._genContStmt,
     BreakStatement: this._genBreakStmt,
-    SwitchStatement: this._genSwitchStmt
+    SwitchStatement: this._genSwitchStmt,
+    ArrowFunctionExpression: this._genArrowFunStmt
   }[node.type] || function () {
     console.warn("Not implemented yet: " + node.type);
     return noop;
@@ -173,7 +157,7 @@ Environment.prototype._genBinExpr = function (node) {
   var a = this._gen(node.left);
   var b = this._gen(node.right);
 
-  var cmp = {
+  return {
     '==': function* () {
       return (yield* self.callExpr(a)) == (yield* self.callExpr(b));
     },
@@ -245,16 +229,6 @@ Environment.prototype._genBinExpr = function (node) {
       return (yield* self.callExpr(a)) && (yield* self.callExpr(b));
     }
   }[node.operator];
-
-  return function () {
-    // FIXME: Convert to yield*
-    var iter = cmp();
-    var res = iter.next();
-    while (!res.done) {
-      res = iter.next();
-    }
-    return res.value;
-  };
 };
 
 Environment.prototype._genUnaryExpr = function (node) {
@@ -288,16 +262,16 @@ Environment.prototype._genUnaryExpr = function (node) {
 };
 
 Environment.prototype._genDelete = function (node) {
+  var self = this;
   var obj = this._genObj(node.argument);
   var attr = this._genName(node.argument);
 
-  return function () {
-    return delete obj()[attr()];
+  return function* () {
+    return delete (yield* self.callExpr(obj))[(yield* self.callExpr(attr))];
   };
 };
 
 Environment.prototype._genObjExpr = function (node) {
-  //TODO property.kind: don't assume init when it can also be set/get
   var self = this;
   var items = [];
   node.properties.forEach(function (property) {
@@ -310,33 +284,33 @@ Environment.prototype._genObjExpr = function (node) {
     });
   });
 
-  return function () {
-    var result = {};
-    items.forEach(function (item) {
-      result[item.key] = item.getVal();
-    });
-    return result;
+  return function*() {
+    (yield* self.mapExpr(items, function*(item) {
+      return [item.key, yield* self.callExpr(item.getVal)];
+    })).reduce((acc,v) => {acc[v[0]] = v[1]; return acc;}, {});
   };
 };
 
 Environment.prototype._genArrExpr = function (node) {
+  var self = this;
   var items = node.elements.map(this._boundGen);
 
-  return function () {
-    return items.map(execute);
+  return function* () {
+    return yield* self.mapExpr(items, self.callExpr);
   };
 };
 
 Environment.prototype._objKey = function (node) {
+  var self = this;
   var key;
   if (node.type === 'Identifier') {
-    key = node.name;
+    key = () => node.name;
   } else {
-    key = this._gen(node)();
+    key = this._gen(node);
   }
 
-  return function () {
-    return key;
+  return function* () {
+    return yield * self.callExpr(key);
   };
 };
 
@@ -346,9 +320,9 @@ Environment.prototype._genCallExpr = function (node) {
   if (node.callee.type === 'MemberExpression') {
     var obj = self._genObj(node.callee);
     var name = self._genName(node.callee);
-    callee = function () {
-      var theObj = obj();
-      return theObj[name()].bind(theObj);
+    callee = function*() {
+      var theObj = yield* self.callExpr(obj);
+      return theObj[(yield* self.callExpr(name))].bind(theObj);
     };
   } else {
     callee = self._gen(node.callee);
@@ -357,7 +331,7 @@ Environment.prototype._genCallExpr = function (node) {
 
   return function* () {
     self.emit('line', node.loc.start.line);
-    var c = callee();
+    var c = yield* self.callExpr(callee);
 
     if (c === undefined) {
       return c;
@@ -366,16 +340,11 @@ Environment.prototype._genCallExpr = function (node) {
     var result;
     var res;
 
-    if (c.next) {
-      res = yield* c;
-      result = res.apply(self._globalObj, args.map(execute));
-    } else {
-      result = c.apply(self._globalObj, args.map(execute));
-    }
+    result = c.apply(self._globalObj, yield* self.mapExpr(args, self.callExpr));
 
     if (result !== undefined) {
       if (result.next) {
-        res = yield* result;
+        res = yield* result; //Really ?
         return res;
       }
     }
@@ -389,10 +358,10 @@ Environment.prototype._genNewExpr = function (node) {
   var args = node.arguments.map(this._boundGen);
   var self = this;
 
-  return function () {
+  return function* () {
     self.emit('line', node.loc.start.line);
-    var cl = callee();
-    var ar = args.map(execute);
+    var cl = yield* self.callExpr(callee);
+    var ar = args.map(self.callExpr);
     return new cl(...ar);
   };
 };
@@ -400,10 +369,10 @@ Environment.prototype._genNewExpr = function (node) {
 Environment.prototype._genMemExpr = function (node) {
   var self = this;
   var obj = this._gen(node.object);
-  var property = this._memExprProperty(node);
-  return function () {
+  var property = this._memExprProperty_memExprProperty(node);
+  return function*() {
     self.emit('line', node.loc.start.line);
-    return obj()[property()];
+    return (yield * self.callExpr(obj))[(yield * self.callExpr(property))];
   };
 };
 
@@ -549,19 +518,13 @@ Environment.prototype._genAssignExpr = function (node) {
   var val = this._gen(node.right);
   return function* () {
     self.emit('line', node.left.loc.start.line);
-    var v = val();
-    if (v !== undefined) {
-      if (v.next) {
-        v = yield* v;
-      }
-    }
-    return setter(obj(), name(), v);
+    return setter(yield* self.callExpr(obj), yield* self.callExpr(name), yield* self.callExpr(val));
   };
 };
 
 Environment.prototype._genFuncDecl = function (node) {
   this._curDeclarations[node.id.name] = this._genFuncExpr(node);
-  return function* () {
+  return function () {
     return noop;
   };
 };
@@ -594,6 +557,64 @@ Environment.prototype.setState = function (state) {
   this.STATE = state;
 };
 
+Environment.prototype._genArrowFunStmt = function (node) {
+    var self = this;
+
+    var oldDeclarations = self._curDeclarations;
+    self._curDeclarations = {};
+    var body = self._gen(node.body);
+    const simpleBody = (node.body.type !== 'BlockStatement');
+    var declarations = self._curDeclarations;
+    self._curDeclarations = oldDeclarations;
+
+    // reset var store
+    return function () {
+        var parent = self._curVarStore;
+        return function () {
+            // build arguments object
+            var args = new Arguments();
+            args.length = arguments.length;
+            for (var i = 0; i < arguments.length; i++) {
+                args[i] = arguments[i];
+            }
+
+            // switch interpreter 'stack'
+            var oldStore = self._curVarStore;
+            var oldThis = self._curThis;
+            self._curVarStore = createVarStore(parent);
+            self._curThis = this;
+
+            addDeclarationsToStore(declarations, self._curVarStore);
+            self._curVarStore.vars.arguments = args;
+
+            // add function args to var store
+            node.params.forEach(function (param, i) {
+                self._curVarStore.vars[param.name] = args[i];
+            });
+
+            // run function body
+            // TODO: be cleverer than me and find a way to yield * this
+            //var result = yield* self.callExpr(body);
+            var iterator = self.callExpr(body);
+            let marker = iterator.next();
+            while (!marker.done) {
+                marker = iterator.next();
+            }
+            const result = marker.value;
+
+            // switch 'stack' back
+            self._curThis = oldThis;
+            self._curVarStore = oldStore;
+
+            if (result instanceof Return) {
+              return result.value;
+            } else if (simpleBody) {
+              return result;
+            }
+        };
+    };
+};
+
 Environment.prototype._genFuncExpr = function (node) {
   var self = this;
 
@@ -606,7 +627,7 @@ Environment.prototype._genFuncExpr = function (node) {
   // reset var store
   return function () {
     var parent = self._curVarStore;
-    return function* () {
+    return function () {
       // build arguments object
       var args = new Arguments();
       args.length = arguments.length;
@@ -629,7 +650,14 @@ Environment.prototype._genFuncExpr = function (node) {
       });
 
       // run function body
-      var result = yield* body();
+      // TODO: be cleverer than me and find a way to yield * this
+      //var result = yield* self.callExpr(body);
+      var iterator = self.callExpr(body);
+      let marker = iterator.next();
+      while (!marker.done) {
+          marker = iterator.next();
+      }
+      const result = marker.value;
 
       // switch 'stack' back
       self._curThis = oldThis;
@@ -743,7 +771,7 @@ Environment.prototype._genLoopStmt = function (node, body) {
     self.emit('line', node.loc.start.line);
     var resp;
     for (yield* init(); yield* test(); yield* update()) {
-      var newResp = yield* body();
+      var newResp = yield* self.callExpr(body);
 
       if (newResp === Break) {
         break;
@@ -761,12 +789,13 @@ Environment.prototype._genLoopStmt = function (node, body) {
 };
 
 Environment.prototype._genDoWhileStmt = function (node) {
+  var self = this;
   var body = this._gen(node.body);
   var loop = this._genLoopStmt(node, body);
 
   return function* () {
-    yield* body();
-    yield* loop();
+    yield* self.callExpr(body);
+    yield* self.callExpr(loop);
   };
 };
 
@@ -785,15 +814,15 @@ Environment.prototype._genForInStmt = function (node) {
     var resp;
     for (var x in right()) {
       self.emit('line', node.loc.start.line);
-      yield* self._genAssignExpr({
+      yield* self.callExpr(self._genAssignExpr({
         operator: '=',
         left: left,
         right: {
           type: 'Literal',
           value: x
         }
-      })();
-      resp = yield* body();
+      }));
+      resp = yield* self.callExpr(body);
     }
     return resp;
   };
@@ -804,32 +833,34 @@ Environment.prototype._genWithStmt = function (node) {
   var obj = self._gen(node.object);
   var body = self._gen(node.body);
   return function* () {
-    self._curVarStore = createVarStore(self._curVarStore, obj());
-    var result = yield* body();
+    self._curVarStore = createVarStore(self._curVarStore, yield* self.callExpr(obj));
+    var result = yield* self.callExpr(body);
     self._curVarStore = self._curVarStore.parent;
     return result;
   };
 };
 
 Environment.prototype._genThrowStmt = function (node) {
+  var self = this;
   var arg = this._gen(node.argument);
-  return function () {
-    throw arg();
+  return function* () {
+    throw yield* self.callExpr(arg);
   };
 };
 
 Environment.prototype._genTryStmt = function (node) {
+  var self = this;
   var block = this._gen(node.block);
   var handler = this._genCatchHandler(node.handler);
   var finalizer = node.finalizer ? this._gen(node.finalizer) : function (x) {
     return x;
   };
 
-  return function () {
+  return function* () {
     try {
-      return finalizer(block());
+      return yield* self.callExpr(finalizer, yield* self.callExpr(block));
     } catch (err) {
-      return finalizer(handler(err));
+      return yield* self.callExpr(handler, err);
     }
   };
 };
@@ -840,10 +871,10 @@ Environment.prototype._genCatchHandler = function (node) {
   }
   var self = this;
   var body = self._gen(node.body);
-  return function (err) {
+  return function*(err) {
     var old = self._curVarStore.vars[node.param.name];
     self._curVarStore.vars[node.param.name] = err;
-    var resp = body();
+    var resp = yield* self.callExpr(body);
     self._curVarStore.vars[node.param.name] = old;
 
     return resp;
@@ -891,7 +922,7 @@ Environment.prototype._genSwitchStmt = function (node) {
         foundMatch = true;
       }
       // foundMatch is guaranteed to be true here
-      var newResp = yield* curCase.code();
+      var newResp = yield* self.callExpr(curCase.code);
       if (newResp === Break) {
         return resp;
       }
@@ -901,7 +932,7 @@ Environment.prototype._genSwitchStmt = function (node) {
       }
     }
     if (!foundMatch && defaultCase) {
-      return yield* defaultCase.code();
+      return yield* self.callExpr(defaultCase.code);
     }
   };
 };
