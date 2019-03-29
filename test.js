@@ -13,29 +13,24 @@ function run(iter){
   return result.value;
 }
 
-// basic
-console.log('2 = ',evaljs.evaluate('1 + 1'));
+function test(expr,env ) {
+    console.log(`${expr}: `, run(env.gen(expr)()));
+}
 
-
-// theTest.js
-//var code = fs.readFileSync('theTest.js', {encoding: 'UTF-8'});
-//var parsedCode = parse(code, {'locations': true});
 var env = new evaljs.Environment([{console: console}]);
 
-//console.log('new Date() = ',run(env.gen("new Date()")()));
-
-var aaa = env.gen("+(new Date())");
-var bbb = aaa();
-bbb.next();
-
-console.log('[1,2].map(function(x) { return x*2 })',run(env.gen('[1,2].map(function(x) { return x*2 })')()));
-console.log('[1,2].map((x) => x*2)',run(env.gen('[1,2].map((x) => x*2)')()));
-console.log('[1,2].map((x) => (new Date()))',run(env.gen('[1,2].map((x) => (new Date()))')()));
-console.log('+(new Date()) = ',run(env.gen('+(new Date())')()));
-console.log('(new Date()).toString() = ',run(env.gen('(new Date()).toString()')()));
-console.log('Date.now() = ',run(env.gen('Date.now()')()));
-console.log('(function() { return Date.now(); })()',run(env.gen('(function() { return Date.now(); })()')()));
-//console.log('[1,2].map(x=>2*x)',run(env.gen("[1,2].map(x=>2*x)")()));
+// basic
+console.log('2 = ',evaljs.evaluate('1 + 1'));
+test('Date.now()', env);
+test('(() => true)() ? 1+1 : 2+2', env);
+test('(() => false)() ? 1+1 : 2+2', env);
+test('[1,2].map(function(x) { return x*2 })', env);
+test('[1,2].map((x) => x*2)', env);
+test('[1,2].map((x) => (new Date()))', env);
+test('+(new Date())', env);
+test('(new Date()).toString()', env);
+test('(function() { return Date.now(); })()', env);
+//console.log('[1,2].map(x=>2*x)');
 
 return;
 

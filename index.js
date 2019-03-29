@@ -739,15 +739,13 @@ Environment.prototype._genIfStmt = function (node) {
 
 Environment.prototype._genCondStmt = function (node) {
   var self = this;
-  var test = function () {
-    self.emit('line', node.loc.start.line);
-    return self._gen(node.test)();
-  };
+  var test = this._gen(node.test);
   var consequent = this._gen(node.consequent);
   var alternate = node.alternate ? this._gen(node.alternate) : noop;
 
-  return function () {
-    return test() ? consequent() : alternate();
+  return function* () {
+    const testValue = (yield* self.callExpr(test));
+    return  testValue ? (yield* self.callExpr(consequent)) : (yield* self.callExpr(alternate));
   };
 };
 
