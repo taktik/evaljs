@@ -1,9 +1,9 @@
 "use strict";
 
-//var fs = require('fs');
+var fs = require('fs');
 var evaljs = require('./index');
 //var parse = require('acorn').parse;
-//var requireFromString = require('require-from-string');
+var requireFromString = require('require-from-string');
 
 function run(iter){
   var result = iter.next();
@@ -13,14 +13,18 @@ function run(iter){
   return result.value;
 }
 
-function test(expr,env ) {
-    console.log(`${expr}: `, run(env.gen(expr)()));
+function test(expr,env,label) {
+    console.log(`${label||expr}: `, run(env.gen(expr)()));
 }
 
 var env = new evaljs.Environment([{console: console}]);
 
 // basic
-console.log('2 = ',evaljs.evaluate('1 + 1'));
+// console.log('2 = ',evaljs.evaluate('1 + 1'));
+test('var i = 0; while (i < 2) {++i; console.log(i);}; i', env);
+test('({a:"a"})["a"]', env);
+test('({"+":"a"})["+"]', env);
+test('var a = "a";({a})["a"]', env);
 test('Date.now()', env);
 test('(() => true)() ? 1+1 : 2+2', env);
 test('(() => false)() ? 1+1 : 2+2', env);
@@ -30,7 +34,22 @@ test('[1,2].map((x) => (new Date()))', env);
 test('+(new Date())', env);
 test('(new Date()).toString()', env);
 test('(function() { return Date.now(); })()', env);
-//console.log('[1,2].map(x=>2*x)');
+test(fs.readFileSync('theTest.js', {encoding: 'UTF-8'}), env, 'The Test');
+
+
+var code = fs.readFileSync('index-compiled.js', {encoding: 'UTF-8'});
+var script = `var evaljs = requireFromString(code); evaljs.evaluate('30 + 4');`;
+
+var envGlobal = {code,console};
+
+envGlobal.global = global;
+var modLocal = {
+    requireFromString: requireFromString,
+};
+var env = new evaljs.Environment([envGlobal, modLocal]);
+test(script, env);
+
+
 
 return;
 
