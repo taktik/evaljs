@@ -363,7 +363,7 @@ Environment.prototype._genNewExpr = function (node) {
   return function* () {
     self.emit('line', node.loc.start.line);
     var cl = yield* self.callExpr(callee);
-    var ar = args.map(self.callExpr);
+    var ar = yield * self.mapExpr(args, self.callExpr);
     return new cl(...ar);
   };
 };

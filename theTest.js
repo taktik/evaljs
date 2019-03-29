@@ -6,21 +6,21 @@
 // missing break statements in switch statements are ok
 /* jshint -W086 */
 
-var op = {
-  '+': function (a, b) {return a + b; }
-}['+'];
-console.log(">>> 4? : ",op(2, 2));
-
 function Test(name) {
-  this._name = name;
+    this._name = name;
 }
 
 Test.prototype.hello = function () {
-  console.log(">>> Hello Marten!? : ","Hello,", this._name + "!");
+    console.log(">>> Hello Marten!? : ","Hello,", this._name + "!");
 };
 
 var a = new Test("Marten");
 a.hello();
+
+var op = {
+  '+': function (a, b) {return a + b; }
+}['+'];
+console.log(">>> 4? : ",op(2, 2));
 
 console.log(">>> 1-4 on separate lines?");
 for (var i = 0; i < 4; i += 1) {
